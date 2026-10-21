@@ -201,9 +201,8 @@ llmfs train \
 
 If you do **not** specify `--validation-input`, `prepare` makes a seeded document-level train/validation split before tokenizer training. If you already have a held-out dataset, supply it with `--validation-input` instead. Never use validation or test data to train the tokenizer.
 
-**Dataset and licensing notes:** The downloaded data live under `data/` and are excluded from Git; training artifacts under `runs/` are also ignored. TinyStories lists the **CDLA-Sharing-1.0** license; review its dataset card and the license before distributing data. The repository's MIT license does not apply to downloaded corpora. More details and experimental caveats are in [docs/datasets.md](docs/datasets.md).
+**Dataset and licensing notes:** The downloaded data live under `data/` and are excluded from Git; training artifacts under `runs/` are also ignored. TinyStories lists the **CDLA-Sharing-1.0** license; review its dataset card and the license before distributing data.
 
-**How this differs from nanoChat:** This is a transparent, verification-first learning and research implementation, **not a faster replacement** for [Karpathy's nanoChat](https://github.com/karpathy/nanochat). See [why this repo](docs/why-this-repo.md).
 
 ## Quick start: text to generated tokens
 
