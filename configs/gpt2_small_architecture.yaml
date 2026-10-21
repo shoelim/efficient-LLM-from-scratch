@@ -1,0 +1,30 @@
+# Architecture-sized educational configuration; not a bitwise GPT-2 reproduction.
+# The original GPT-2 uses Conv1D projections and other detail differences.
+model:
+  block_size: 1024
+  n_layer: 12
+  n_head: 12
+  n_embd: 768
+  dropout: 0.1
+  bias: true
+  norm: layernorm
+  position: learned
+  mlp: gelu
+  attention_impl: sdpa
+  tie_weights: true
+train:
+  batch_size: 2
+  grad_accum_steps: 16
+  steps: 100000
+  learning_rate: 0.00025
+  min_lr: 0.000025
+  warmup_steps: 1000
+  weight_decay: 0.1
+  grad_clip: 1.0
+  eval_interval: 1000
+  eval_batches: 20
+  log_interval: 50
+  save_interval: 1000
+  seed: 1337
+  device: cuda
+  precision: bf16

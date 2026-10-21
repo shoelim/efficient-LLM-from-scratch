@@ -1,0 +1,28 @@
+# Tiny CPU configuration; validates the whole pipeline in seconds.
+model:
+  block_size: 16
+  n_layer: 1
+  n_head: 2
+  n_embd: 32
+  dropout: 0.0
+  norm: layernorm
+  position: learned
+  mlp: gelu
+  attention_impl: sdpa
+  tie_weights: true
+train:
+  batch_size: 4
+  grad_accum_steps: 1
+  steps: 4
+  learning_rate: 0.002
+  min_lr: 0.0002
+  warmup_steps: 1
+  weight_decay: 0.01
+  grad_clip: 1.0
+  eval_interval: 2
+  eval_batches: 2
+  log_interval: 1
+  save_interval: 2
+  seed: 1337
+  device: cpu
+  precision: fp32

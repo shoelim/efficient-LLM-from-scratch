@@ -1,0 +1,34 @@
+# Small enough to explore on laptop. Set OMP_NUM_THREADS=1 for tiny models.
+model:
+  block_size: 128
+  n_layer: 2
+  n_head: 4
+  n_kv_head: 2
+  n_embd: 128
+  dropout: 0.0
+  bias: false
+  tie_weights: true
+  norm: rmsnorm
+  position: rope
+  mlp: swiglu
+  fused_qkv: true
+  attention_impl: sdpa
+train:
+  batch_size: 8
+  grad_accum_steps: 1
+  steps: 200
+  learning_rate: 0.0006
+  min_lr: 0.00006
+  warmup_steps: 20
+  weight_decay: 0.1
+  grad_clip: 1.0
+  eval_interval: 50
+  eval_batches: 10
+  log_interval: 10
+  save_interval: 50
+  seed: 1337
+  device: cpu
+  precision: fp32
+  optimizer: torch
+  compile: false
+  batch_device: cpu

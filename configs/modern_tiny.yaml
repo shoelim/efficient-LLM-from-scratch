@@ -1,0 +1,32 @@
+# Controlled modern variant: RMSNorm + RoPE + SwiGLU + GQA.
+# Train against matched classical configs to understand each change.
+model:
+  block_size: 128
+  n_layer: 2
+  n_head: 4
+  n_kv_head: 2
+  n_embd: 128
+  dropout: 0.0
+  bias: false
+  norm: rmsnorm
+  position: rope
+  mlp: swiglu
+  attention_impl: sdpa
+  tie_weights: true
+  fused_qkv: true
+train:
+  batch_size: 8
+  grad_accum_steps: 1
+  steps: 100
+  learning_rate: 0.0006
+  min_lr: 0.00006
+  warmup_steps: 10
+  weight_decay: 0.1
+  grad_clip: 1.0
+  eval_interval: 25
+  eval_batches: 10
+  log_interval: 10
+  save_interval: 25
+  seed: 1337
+  device: auto
+  precision: fp32

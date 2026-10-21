@@ -1,0 +1,30 @@
+# Suggested 5–10M-scale starting point. Prepare your own licensed text corpus
+# before using. This file DOES NOT download TinyStories or contain its weights.
+model:
+  block_size: 256
+  n_layer: 4
+  n_head: 4
+  n_embd: 256
+  dropout: 0.1
+  norm: layernorm
+  position: learned
+  mlp: gelu
+  attention_impl: sdpa
+  tie_weights: true
+  fused_qkv: true
+train:
+  batch_size: 16
+  grad_accum_steps: 4
+  steps: 10000
+  learning_rate: 0.0006
+  min_lr: 0.00006
+  warmup_steps: 300
+  weight_decay: 0.1
+  grad_clip: 1.0
+  eval_interval: 500
+  eval_batches: 40
+  log_interval: 20
+  save_interval: 500
+  seed: 1337
+  device: cuda
+  precision: bf16

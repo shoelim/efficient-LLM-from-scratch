@@ -1,0 +1,28 @@
+# Trainable on CPU (slow) or small GPU; learning curves better with more steps.
+model:
+  block_size: 128
+  n_layer: 2
+  n_head: 4
+  n_embd: 128
+  dropout: 0.1
+  norm: layernorm
+  position: learned
+  mlp: gelu
+  attention_impl: manual
+  tie_weights: true
+train:
+  batch_size: 16
+  grad_accum_steps: 2
+  steps: 600
+  learning_rate: 0.0006
+  min_lr: 0.00006
+  warmup_steps: 30
+  weight_decay: 0.1
+  grad_clip: 1.0
+  eval_interval: 100
+  eval_batches: 20
+  log_interval: 20
+  save_interval: 100
+  seed: 1337
+  device: auto
+  precision: fp32

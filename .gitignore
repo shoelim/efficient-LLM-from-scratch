@@ -1,0 +1,37 @@
+# Python and packaging
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+build/
+dist/
+
+# OS and editors
+.DS_Store
+.vscode/
+.idea/
+.ipynb_checkpoints/
+
+# Generated datasets, weights, training runs and benchmark results
+/data/*
+!/data/.gitkeep
+/runs/*
+!/runs/.gitkeep
+/benchmarks/*
+*.pt
+*.pth
+*.bin
+*.npy
+*.safetensors
+*.log
+
+# Secrets / local environment
+.env
+.env.*
+!.env.example
