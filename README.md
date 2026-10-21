@@ -30,6 +30,181 @@ python -m pytest -q
 
 The installed CLI is `llmfs` (or `python -m llmfs`). All commands below work with the included miniature text example on CPU; no model weights are bundled.
 
+## Train on a real dataset: TinyStories (recommended)
+
+**[TinyStories](https://huggingface.co/datasets/roneneldan/TinyStories)** is the recommended first dataset for training a small language model from random initialization. It contains short English stories with a relatively limited vocabulary, so it is easier to run meaningful language-model experiments before moving to broad web-text datasets. The raw data and pretrained weights are **not** included in this repository.
+
+This walkthrough uses **20,000 training stories and 1,000 validation stories**. Both come from the dataset's existing, separate train and validation splits; this is a bounded starter experiment, **not** the full TinyStories benchmark.
+
+### 1. Install the dataset and tokenizer dependencies
+
+From the repository root, after creating/activating your virtual environment:
+
+```bash
+python -m pip install -e '.[dev,data]'
+```
+
+The `data` extra installs Hugging Face `datasets` (for downloading) and the Rust-backed `tokenizers` package (for practical BPE training). It **does not** download a pretrained tokenizer: we will train our own on the downloaded training stories.
+
+### 2. Download the dataset
+
+```bash
+python scripts/download_tinystories.py \
+  --output data/tinystories/raw \
+  --train-stories 20000 \
+  --validation-stories 1000 \
+  --seed 1337
+```
+
+The downloader uses streaming and buffered shuffling, rejects exact duplicate stories within/across splits, and writes:
+
+```text
+data/tinystories/raw/
+├── train.jsonl        # 20,000 training stories, one {"text": "..."} per line
+├── validation.jsonl   # 1,000 separate validation stories
+└── source.json        # provenance, row counts, seed, file checksums
+```
+
+A story is one JSON object per line, for example:
+
+```json
+{"text": "Once upon a time, there was a little bird."}
+```
+
+The downloader refuses to overwrite a nonempty output directory. To start a different experiment, use a new output path. For more reproducible datasets, optionally pass `--revision <HUGGING_FACE_COMMIT_SHA>` to pin the dataset source; the default follows the provider's current revision. Note that streamed buffered shuffling is **not** a uniform random sample from the entire corpus.
+
+### 3. Train a tokenizer and prepare token arrays
+
+```bash
+llmfs prepare \
+  --input data/tinystories/raw/train.jsonl \
+  --validation-input data/tinystories/raw/validation.jsonl \
+  --output data/tinystories/packed \
+  --tokenizer fast-bpe \
+  --vocab-size 2048
+```
+
+This step:
+
+1. Trains a **2048-token byte-level BPE tokenizer from scratch** on training stories only.
+2. Encodes both splits with that same frozen tokenizer, adding an end-of-document token after each story.
+3. Saves the sequences and metadata in:
+
+```text
+data/tinystories/packed/
+├── tokenizer.json     # learned vocabulary and merges
+├── train.npy          # training token IDs (uint32)
+├── val.npy            # held-out token IDs (uint32)
+└── manifest.json      # sizes, source paths and integrity checksums
+```
+
+`fast-bpe` is the practical option for this experiment. For understanding BPE itself, `--tokenizer bpe` uses our pure-Python implementation but is considerably slower. The educational `--tokenizer char` option is also available. `llmfs prepare` holds documents in memory, so **do not use it to ingest the entire multi-million-story corpus** without redesigning the preprocessing pipeline for streaming/sharding.
+
+### 4. Train the language model
+
+**NVIDIA GPU with BF16 support (recommended for the starter experiment):**
+
+```bash
+llmfs train \
+  --data data/tinystories/packed \
+  --config configs/tinystories_starter_cuda.yaml \
+  --output runs/tinystories-starter
+```
+
+This configuration uses a small four-layer Transformer with RoPE, RMSNorm, SwiGLU, and efficient scaled dot-product attention, initialized **from scratch**. It specifies 3,000 optimizer steps, which is a starter setting rather than a quality-optimal recipe. You can adjust batch size, context length, learning rate, and steps in the YAML configuration to fit your hardware and experiment.
+
+**CPU alternative (primarily to verify the pipeline, not a quality benchmark):**
+
+```bash
+llmfs train \
+  --data data/tinystories/packed \
+  --config configs/tinystories_starter_cpu.yaml \
+  --output runs/tinystories-cpu
+```
+
+The CPU config uses a smaller two-layer model and fewer steps. If your GPU lacks BF16 support, change `precision` and related settings in a copy of the CUDA YAML according to your hardware before training.
+
+The training run writes checkpoints and logs in its output directory, including `last.pt`. The project deliberately prevents a new run from silently reusing a populated run directory. **Use a new directory for a new run** or resume an interrupted run (see below).
+
+### 5. Evaluate on held-out stories
+
+```bash
+llmfs evaluate \
+  --checkpoint runs/tinystories-starter/last.pt \
+  --data data/tinystories/packed \
+  --batches 40 \
+  --batch-size 8
+```
+
+This reports held-out next-token negative log-likelihood and perplexity, estimated from sampled validation windows. Lower is generally better **when the tokenizer and evaluation procedure are held fixed**. The default validation evaluator is not an exhaustive full-corpus metric.
+
+For a simple count-based reference on the same token sequence:
+
+```bash
+llmfs baseline --data data/tinystories/packed
+```
+
+### 6. Export and generate text
+
+Export a smaller **inference-only** checkpoint (weights in `safetensors`, plus model configuration and tokenizer):
+
+```bash
+llmfs export \
+  --checkpoint runs/tinystories-starter/last.pt \
+  --output runs/tinystories-export
+```
+
+Generate a story using the optimized preallocated KV cache:
+
+```bash
+llmfs generate \
+  --checkpoint runs/tinystories-export \
+  --prompt 'Once upon a time, there was a little' \
+  --max-new-tokens 150 \
+  --temperature 0.8 \
+  --top-k 40
+```
+
+For deterministic greedy decoding, set `--temperature 0`. You may also try `--top-p 0.9`, `--no-cache`, or `--cache-mode dynamic` to compare sampling and inference paths. Small models or very short runs may still produce poor text; don't infer model quality from the smoke test alone.
+
+### 7. Resume training (optional)
+
+To continue the **same run** after an interruption, use the same data, configuration, and output directory, supplying its checkpoint:
+
+```bash
+llmfs train \
+  --data data/tinystories/packed \
+  --config configs/tinystories_starter_cuda.yaml \
+  --output runs/tinystories-starter \
+  --resume runs/tinystories-starter/last.pt
+```
+
+Resume checks the dataset fingerprint and saved configuration. Do not use `--resume` to start a fundamentally different experiment; create a new directory instead. Load `.pt` checkpoints only from trusted sources.
+
+### Try a smaller sample or your own text
+
+To test the **download → preparation → training** path with less data, download a separate small subset (for example, `--train-stories 1000 --validation-stories 100 --output data/tinystories/small-raw`), prepare it into a different `small-packed` directory, and use the CPU config with a **fresh** run directory. This mainly checks that everything works; it won't yield good stories.
+
+To use local text instead, provide either a `.jsonl` file with one `{"text": "..."}` document per line, a `.txt` file whose blank-line-separated paragraphs are documents, or a directory of `.txt` files:
+
+```bash
+llmfs prepare \
+  --input path/to/my_corpus.txt \
+  --output data/my-corpus \
+  --tokenizer char
+
+llmfs train \
+  --data data/my-corpus \
+  --config configs/smoke.yaml \
+  --output runs/my-corpus-test
+```
+
+If you do **not** specify `--validation-input`, `prepare` makes a seeded document-level train/validation split before tokenizer training. If you already have a held-out dataset, supply it with `--validation-input` instead. Never use validation or test data to train the tokenizer.
+
+**Dataset and licensing notes:** The downloaded data live under `data/` and are excluded from Git; training artifacts under `runs/` are also ignored. TinyStories lists the **CDLA-Sharing-1.0** license; review its dataset card and the license before distributing data. The repository's MIT license does not apply to downloaded corpora. More details and experimental caveats are in [docs/datasets.md](docs/datasets.md).
+
+**How this differs from nanoChat:** This is a transparent, verification-first learning and research implementation, **not a faster replacement** for [Karpathy's nanoChat](https://github.com/karpathy/nanochat). See [why this repo](docs/why-this-repo.md).
+
 ## Quick start: text to generated tokens
 
 ```bash
@@ -76,7 +251,7 @@ torchrun --standalone --nproc_per_node=2 -m llmfs train \
   --output runs/my-ddp-experiment
 ```
 
-`configs/efficient_cpu.yaml` is a CPU alternative. The CUDA config enables mixed-precision execution; `torch.compile` is opt-in. The included BPE **trainer** is a transparent learning implementation and is too slow for training a large vocabulary on multi-GB corpora. For large-scale use, prepare tokens with a scalable tokenizer/data pipeline and integrate the resulting IDs/metadata.
+`configs/efficient_cpu.yaml` is a CPU alternative. The CUDA config enables mixed-precision execution; `torch.compile` is opt-in. The included pure-Python BPE **trainer** is a transparent learning implementation and too slow for large datasets. For practical bounded subsets, install `.[data]` and use `--tokenizer fast-bpe`. For large-scale use, prepare tokens with a scalable tokenizer/data pipeline and integrate the resulting IDs/metadata.
 
 Resume training by repeating the original command with `--resume <run>/last.pt`; a run's training schedule, data fingerprint, and distributed world size must match. Only load PyTorch `.pt` training checkpoints from trusted sources. Inference exports use `safetensors` instead.
 
@@ -119,10 +294,10 @@ tests/             correctness and integration tests
 notes/             derivations for the key components
 exercises/         coding exercises with partial solutions
 docs/              study plan, guided lessons and efficiency notes
-examples/          tiny text and prompt/response samples
+examples/          tiny original offline text and prompt/response samples
 ```
 
-**Study it step by step:** [guided lessons](docs/lessons.md) · [16-week plan](docs/study-plan.md) · [math notes](notes/) · [optimization details](docs/efficiency.md).
+**Study it step by step:** [guided lessons](docs/lessons.md) · [16-week plan](docs/study-plan.md) · [math notes](notes/) · [optimization details](docs/efficiency.md) · [datasets](docs/datasets.md) · [why this repo](docs/why-this-repo.md).
 
 **Contributing:** See [CONTRIBUTING.md](CONTRIBUTING.md) for tests, coding conventions and reproducibility guidelines.
 
@@ -130,6 +305,4 @@ examples/          tiny text and prompt/response samples
 
 The repository does **not** provide pretrained GPT-2 weight compatibility, verified large-scale model quality, FSDP, distributed inference, dynamic request batching, paged attention, quantization, speculative decoding or an HTTP serving stack. The bundled CPU examples and tests validate functional behavior, not competitive model performance; CUDA/NCCL paths have not been benchmarked in the development environment.
 
-Influenced by [BuildAnLLM](https://github.com/jammastergirish/BuildAnLLM#resources), [Raschka's *Build a Large Language Model (From Scratch)*](https://www.sebastianraschka.com/llms-from-scratch/), [ARENA](https://learn.arena.education/chapter1_transformer_interp/), [Stanford CS336](https://cs336.stanford.edu/), and [nanochat](https://github.com/karpathy/nanochat). These are reading references, not runtime dependencies or copied source trees.
-
-Released under the [MIT License](LICENSE). Bring your own suitably licensed training data; no external training corpus is bundled.
+Influenced by [BuildAnLLM](https://github.com/jammastergirish/BuildAnLLM#resources), [Raschka's *Build a Large Language Model (From Scratch)*](https://www.sebastianraschka.com/llms-from-scratch/), [ARENA](https://learn.arena.education/chapter1_transformer_interp/), [Stanford CS336](https://cs336.stanford.edu/), and [nanochat](https://github.com/karpathy/nanochat). 
