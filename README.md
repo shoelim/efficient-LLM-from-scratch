@@ -297,7 +297,7 @@ docs/              study plan, guided lessons and efficiency notes
 examples/          tiny original offline text and prompt/response samples
 ```
 
-**Study it step by step:** [guided lessons](docs/lessons.md) · [16-week plan](docs/study-plan.md) · [math notes](notes/) · [optimization details](docs/efficiency.md) · [datasets](docs/datasets.md) · [why this repo](docs/why-this-repo.md).
+**Study it step by step:** [guided lessons](docs/lessons.md) · [16-week plan](docs/study-plan.md) · [math notes](notes/) · [optimization details](docs/efficiency.md).
 
 **Contributing:** See [CONTRIBUTING.md](CONTRIBUTING.md) for tests, coding conventions and reproducibility guidelines.
 
