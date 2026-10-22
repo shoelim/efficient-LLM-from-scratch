@@ -1,6 +1,6 @@
 # LLM from Scratch
 
-**A readable decoder-only Transformer implementation with efficient PyTorch training and KV-cached inference.**
+**A decoder-only Transformer implementation with efficient PyTorch training and KV-cached inference.**
 
 Build a language model end to end: prepare text, train a tokenizer, train a GPT-style model from random initialization, evaluate held-out loss, generate tokens, and fine-tune with supervised examples or LoRA. The reference implementations and numerical parity tests make it possible to study each optimization rather than treating it as a black box.
 
